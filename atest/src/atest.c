@@ -177,6 +177,7 @@ void release(uint32_t offset, uint32_t size){
 	} else if (offset > ftop && offset < rtop) { /* remember irregular case */
 		ftop1 = offset;
 		fsz1 = size;
+		return;
 	} else {
 		return; /* param error */
 	}
@@ -192,6 +193,7 @@ void release(uint32_t offset, uint32_t size){
 			retp=BUFFSZ -1;
 		}
 	}
+	buff_full = 0;
 }
 int main(void) {
 
