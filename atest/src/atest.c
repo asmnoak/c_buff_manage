@@ -129,6 +129,14 @@ void sendtest() {
 }
 //
 void rcv(uint32_t sz){
+    if (ftop>ctop && (ctop + sz > ftop)) {
+    	buff_full = 1;
+    	return; /* over flow */
+    }
+    if (ctop + sz > endp) {
+    	buff_full = 1;
+    	return; /* over flow */
+    }
 	ctop = ctop + sz;
 	if (ftop>endp-ctop+1){
 		retp=ctop;
@@ -162,13 +170,15 @@ void read(Data_a_ts * ptr){
 void release(uint32_t offset, uint32_t size){
 	if (ctop==(offset+size)){
 		ftop = ctop;
-	} else if (ftop == 0){
+	} else if (ftop == 0 && offset==0){
 		ftop = size;
 	} else if (ftop==offset) {
 		ftop = offset + size;
-	} else {
+	} else if (offset > ftop && offset < rtop) { /* remember irregular case */
 		ftop1 = offset;
 		fsz1 = size;
+	} else {
+		return; /* param error */
 	}
 	if (ctop >= ftop) {
 		if (ctop==0 || ctop==ftop){
@@ -206,13 +216,13 @@ int main(void) {
 	rcv(12);
 	read((Data_a_ts *)&m);
 	//release(0,34);
-	release(0,16);
+	release(0,46);
 	rcv(12);
 	read((Data_a_ts *)&m);
-	release(16,18);
-	release(34,12);
-	rcv(14);
 	release(46,12);
+	//release(34,12);
+	rcv(14);
+	//release(46,12);
 	read((Data_a_ts *)&m);
 	uu=m.stData_a[0].shSize;
 	uu=m.stData_a[1].shSize;
