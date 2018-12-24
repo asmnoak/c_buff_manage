@@ -8,42 +8,39 @@
 ===============================================================================
 */
 
-#include <cr_section_macros.h>
+//#include <cr_section_macros.h>
 #include <stdint.h>
+#include <string.h>
 // TODO: insert other include files here
 
 // TODO: insert other definitions and declarations here
 #define BUFFSZ 64
 typedef struct {
-	uint8_t bb;
-	uint32_t btr;
-} tf;
+	int16_t uhOffset;
+	int16_t shSize;
+} Data_ts;
 typedef struct {
-	tf ar[5];
+	Data_ts ar[3];
 } tf_a;
-tf_a st;
-void aa(tf_a * ptr) {
-	st.ar[0].bb=5;
-	st.ar[0].btr=23;
-	ptr = &st;
-}
+Data_ts stDara_a[3];
+
 uint8_t buff[BUFFSZ];
-uint32_t  ctop;
-uint32_t  startp;
-uint32_t  endp;
-uint32_t  retp;
-uint32_t  rtop;
-uint32_t  gcp; /* get info */
-uint32_t  gsz;
-uint32_t  gcp2;
-uint32_t  gsz2;
-uint32_t  ftop;
-uint32_t  ftop1;
-uint32_t  fsz1;
-uint32_t  grp; /* read offset */
-uint32_t  grsz;/* read size */
-uint32_t  grp2; /* read offset */
-uint32_t  grsz2;/* read size */
+int32_t  ctop;
+int32_t  startp;
+int32_t  endp;
+int32_t  retp;
+int32_t  rtop;
+int32_t  gcp; /* get info */
+int32_t  gsz;
+int32_t  gcp2;
+int32_t  gsz2;
+int32_t  ftop;
+int32_t  ftop1;
+int32_t  fsz1;
+int32_t  grp; /* read offset */
+int32_t  grsz;/* read size */
+int32_t  grp2; /* read offset */
+int32_t  grsz2;/* read size */
 
 
 
@@ -53,20 +50,20 @@ void senda(uint32_t offset, uint32_t size) {
 }
 void getinf() {
 	if (ftop>endp-ctop+1){
-		gcp2=ctop;
-		gsz2=endp - ctop + 1;
+		stDara_a[1].uhOffset=ctop;
+		stDara_a[1].shSize=endp - ctop + 1;
 		retp=ctop;
 		ctop = 0;
-		gcp=ctop;
+		stDara_a[0].uhOffset=ctop;
 		if (ftop!=0) {
-			gsz = ftop-1;
+			stDara_a[0].shSize = ftop-1;
 		} else {
-			gsz = ftop-1;
+			stDara_a[0].shSize = ftop-1;
 		}
-		gsz = ftop-1;
+		stDara_a[0].shSize = ftop-1;
 	} else {
-		gcp = ctop;
-		gsz = endp - ctop + 1;
+		stDara_a[0].uhOffset = ctop;
+		stDara_a[0].shSize = endp - ctop + 1;
 	}
 }
 void rbuff(uint32_t offset, uint32_t size) {
@@ -116,22 +113,29 @@ void rcv(uint32_t sz){
 		ctop = 0;
 	}
 }
-void read(){
+void read(Data_ts ptr[]){
+	uint32_t uwIndex;
 	if (ctop > rtop) {
-		grp = rtop;
-		grsz = ctop - rtop;
+		stDara_a[0].uhOffset = rtop;
+		stDara_a[0].shSize = ctop - rtop;
 		rtop = ctop;
 	} else if(ctop < rtop) {
-		grp = 0;
-		grsz = ctop;
+		stDara_a[0].uhOffset = 0;
+		stDara_a[0].shSize = ctop;
 		/* if ctop==0 grp2 -> grp */
-		grp2 = rtop;
-		grsz2 = retp - rtop;
+		if (ctop == 0) {
+			uwIndex = 0;
+		} else {
+			uwIndex = 1;
+		}
+		stDara_a[uwIndex].uhOffset = rtop;
+		stDara_a[uwIndex].shSize = retp - rtop;
 		rtop = ctop;
 	} else { /* ctop == rtop */
-		grp = 0;
-		grsz = 0;
+		stDara_a[0].uhOffset = 0;
+		stDara_a[0].shSize = 0;
 	}
+	ptr = stDara_a;
 }
 void release(uint32_t offset, uint32_t size){
 	if (ctop==(offset+size)){
@@ -160,8 +164,8 @@ void release(uint32_t offset, uint32_t size){
 int main(void) {
 
     // TODO: insert code here
-	tf_a * m;
-	uint8_t uu;
+	Data_ts * m;
+	int16_t uu;
 	uint32_t ss;
 	startp = 0;
 	endp = BUFFSZ -1;
@@ -173,21 +177,18 @@ int main(void) {
 	rcv(16);
 	rcv(18);
 	rcv(12);
-	read();
-	release(0,34);
+	read(m);
+	//release(0,34);
+	release(0,16);
 	rcv(12);
-	read();
+	read(m);
+	release(16,18);
 	release(34,12);
+	rcv(14);
 	release(46,12);
+	read(m);
+	uu=m[0].shSize;
+	uu=m[1].shSize;
 	while(1);
-    // Force the counter to be placed into memory
-    volatile static int i = 0 ;
-    // Enter an infinite loop, just incrementing a counter
-    while(1) {
-    	aa(m);
-    	uu=m->ar[0].bb;
-		i++;
-		while (1);
-    }
     return 0 ;
 }
