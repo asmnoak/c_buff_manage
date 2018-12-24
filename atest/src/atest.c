@@ -42,19 +42,36 @@ int32_t  grp; /* read offset */
 int32_t  grsz;/* read size */
 int32_t  grp2; /* read offset */
 int32_t  grsz2;/* read size */
+uint8_t  buff_full;
 
 
 
 void senda(uint32_t offset, uint32_t size) {
-	ctop = ctop + size;
+	if (buff_full) {
+		return; /* busy */
+	}
+	if (ftop>endp-ctop+1) {
+		if (ftop > size) {
+			retp=ctop;
+			ctop=size;
+		}
+		else {
+			buff_full = 1;
+		}
+	} else if (ctop + size > endp) {
+		buff_full = 1;
+	}
+	else {
+		ctop = ctop + size;
+	}
 	/* to do: ctop over */
 }
 void getinf(Data_a_ts * ptr) {
 	if (ftop>endp-ctop+1){
 		stData.stData_a[1].uhOffset=ctop;
 		stData.stData_a[1].shSize=endp - ctop + 1;
-		retp=ctop;
-		ctop = 0;
+		//retp=ctop;
+		//ctop = 0;
 		stData.stData_a[0].uhOffset=ctop;
 		if (ftop!=0) {
 			stData.stData_a[0].shSize = ftop-1;
@@ -89,6 +106,7 @@ void rbuff(uint32_t offset, uint32_t size) {
 			ftop=0;
 		}
 	}
+	buff_full=0;
 }
 void sendtest() {
 	Data_a_ts m;
@@ -177,6 +195,7 @@ int main(void) {
 	ctop = 0;
 	ftop = 0;
 	rtop = 0; /* rcv read */
+	buff_full = 0;
 	//
 	sendtest();
 	ctop = 0;
