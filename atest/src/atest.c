@@ -20,9 +20,10 @@ typedef struct {
 	int16_t shSize;
 } Data_ts;
 typedef struct {
-	Data_ts ar[3];
-} tf_a;
-Data_ts stDara_a[3];
+	Data_ts  stData_a[3];
+} Data_a_ts;
+Data_a_ts stData;
+//Data_a_ts stData_p_a = {&stData_a[0],&stData_a[1],&stData_a[3]};
 
 uint8_t buff[BUFFSZ];
 int32_t  ctop;
@@ -48,23 +49,24 @@ void senda(uint32_t offset, uint32_t size) {
 	ctop = ctop + size;
 	/* to do: ctop over */
 }
-void getinf() {
+void getinf(Data_a_ts * ptr) {
 	if (ftop>endp-ctop+1){
-		stDara_a[1].uhOffset=ctop;
-		stDara_a[1].shSize=endp - ctop + 1;
+		stData.stData_a[1].uhOffset=ctop;
+		stData.stData_a[1].shSize=endp - ctop + 1;
 		retp=ctop;
 		ctop = 0;
-		stDara_a[0].uhOffset=ctop;
+		stData.stData_a[0].uhOffset=ctop;
 		if (ftop!=0) {
-			stDara_a[0].shSize = ftop-1;
+			stData.stData_a[0].shSize = ftop-1;
 		} else {
-			stDara_a[0].shSize = ftop-1;
+			stData.stData_a[0].shSize = ftop-1;
 		}
-		stDara_a[0].shSize = ftop-1;
+		stData.stData_a[0].shSize = ftop-1;
 	} else {
-		stDara_a[0].uhOffset = ctop;
-		stDara_a[0].shSize = endp - ctop + 1;
+		stData.stData_a[0].uhOffset = ctop;
+		stData.stData_a[0].shSize = endp - ctop + 1;
 	}
+	*ptr = stData;
 }
 void rbuff(uint32_t offset, uint32_t size) {
 	if (ctop==(offset+size)){
@@ -89,21 +91,23 @@ void rbuff(uint32_t offset, uint32_t size) {
 	}
 }
 void sendtest() {
+	Data_a_ts m;
+	//Data_ts * m;
 	buff[0]='1';
 	senda(0,18);
-	getinf();
+	getinf((Data_a_ts *)&m);
 	buff[gcp]='2';
 	senda(gcp,18);
-	getinf();
+	getinf((Data_a_ts *)&m);
 	buff[gcp]='3';
 	senda(gcp,18);
 	rbuff(0,18);
 	rbuff(18,18);
-	getinf();
+	getinf((Data_a_ts *)&m);
 	buff[gcp]='4';
 	senda(gcp,18);
 	rbuff(36,18);
-	getinf();
+	getinf((Data_a_ts *)&m);
 }
 //
 void rcv(uint32_t sz){
@@ -113,29 +117,29 @@ void rcv(uint32_t sz){
 		ctop = 0;
 	}
 }
-void read(Data_ts ptr[]){
+void read(Data_a_ts * ptr){
 	uint32_t uwIndex;
 	if (ctop > rtop) {
-		stDara_a[0].uhOffset = rtop;
-		stDara_a[0].shSize = ctop - rtop;
+		stData.stData_a[0].uhOffset = rtop;
+		stData.stData_a[0].shSize = ctop - rtop;
 		rtop = ctop;
 	} else if(ctop < rtop) {
-		stDara_a[0].uhOffset = 0;
-		stDara_a[0].shSize = ctop;
+		stData.stData_a[0].uhOffset = 0;
+		stData.stData_a[0].shSize = ctop;
 		/* if ctop==0 grp2 -> grp */
 		if (ctop == 0) {
 			uwIndex = 0;
 		} else {
 			uwIndex = 1;
 		}
-		stDara_a[uwIndex].uhOffset = rtop;
-		stDara_a[uwIndex].shSize = retp - rtop;
+		stData.stData_a[uwIndex].uhOffset = rtop;
+		stData.stData_a[uwIndex].shSize = retp - rtop;
 		rtop = ctop;
 	} else { /* ctop == rtop */
-		stDara_a[0].uhOffset = 0;
-		stDara_a[0].shSize = 0;
+		stData.stData_a[0].uhOffset = 0;
+		stData.stData_a[0].shSize = 0;
 	}
-	ptr = stDara_a;
+	*ptr = stData;
 }
 void release(uint32_t offset, uint32_t size){
 	if (ctop==(offset+size)){
@@ -164,7 +168,7 @@ void release(uint32_t offset, uint32_t size){
 int main(void) {
 
     // TODO: insert code here
-	Data_ts * m;
+	Data_a_ts m;
 	int16_t uu;
 	uint32_t ss;
 	startp = 0;
@@ -174,21 +178,25 @@ int main(void) {
 	ftop = 0;
 	rtop = 0; /* rcv read */
 	//
+	sendtest();
+	ctop = 0;
+	ftop = 0;
+	//
 	rcv(16);
 	rcv(18);
 	rcv(12);
-	read(m);
+	read((Data_a_ts *)&m);
 	//release(0,34);
 	release(0,16);
 	rcv(12);
-	read(m);
+	read((Data_a_ts *)&m);
 	release(16,18);
 	release(34,12);
 	rcv(14);
 	release(46,12);
-	read(m);
-	uu=m[0].shSize;
-	uu=m[1].shSize;
+	read((Data_a_ts *)&m);
+	uu=m.stData_a[0].shSize;
+	uu=m.stData_a[1].shSize;
 	while(1);
     return 0 ;
 }
