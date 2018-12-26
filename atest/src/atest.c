@@ -66,19 +66,61 @@ void senda(uint32_t offset, uint32_t size) {
 	}
 	/* to do: ctop over */
 }
+void senda2(uint32_t offset, uint32_t size) {
+	if (buff_full) {
+		return; /* busy */
+	}
+	if (ftop <= ctop) {
+		if (ctop + size > endp) {
+			if (ftop >= size) {
+				retp = ctop;
+				ctop = size;
+				if (ctop == ftop) {
+					ftop = 0;
+					ctop = retp;
+				}
+			} else {
+				buff_full = 1;
+			}
+		} else {
+			ctop = ctop + size;
+		}
+	} else if (ftop > ctop) {
+		if (ctop + size <= ftop) {
+			ctop = ctop + size;
+			if (ctop == ftop) {
+				ftop = 0;
+				ctop = retp;
+			}
+		} else {
+			buff_full = 1;
+		}
+	}
+}
 void getinf(Data_a_ts * ptr) {
-	if (ftop>endp-ctop+1){
-		stData.stData_a[1].uhOffset=ctop;
-		stData.stData_a[1].shSize=endp - ctop + 1;
-		//retp=ctop;
-		//ctop = 0;
-		stData.stData_a[0].uhOffset=ctop;
+	stData.stData_a[1].uhOffset=0;
+	stData.stData_a[1].shSize=0;
+	stData.stData_a[0].uhOffset=0;
+	stData.stData_a[0].shSize = 0;
+
+	if (ftop<ctop){
 		if (ftop!=0) {
+			stData.stData_a[1].uhOffset=ctop;
+			stData.stData_a[1].shSize=endp - ctop + 1;
+			stData.stData_a[0].uhOffset=0;
 			stData.stData_a[0].shSize = ftop-1;
 		} else {
-			stData.stData_a[0].shSize = ftop-1;
+			stData.stData_a[0].uhOffset=ctop;
+			stData.stData_a[0].shSize=endp - ctop + 1;
 		}
-		stData.stData_a[0].shSize = ftop-1;
+		//retp=ctop;
+		//ctop = 0;
+		//stData.stData_a[0].uhOffset=0;
+		//if (ftop!=0) {
+		//	stData.stData_a[0].shSize = ftop-1;
+		//} else {
+		//	stData.stData_a[0].shSize = 0;
+		//}
 	} else {
 		stData.stData_a[0].uhOffset = ctop;
 		stData.stData_a[0].shSize = endp - ctop + 1;
@@ -104,6 +146,7 @@ void rbuff(uint32_t offset, uint32_t size) {
 	} else {
 		if (retp==ftop){
 			ftop=0;
+			retp=endp;
 		}
 	}
 	buff_full=0;
@@ -111,21 +154,23 @@ void rbuff(uint32_t offset, uint32_t size) {
 void sendtest() {
 	Data_a_ts m;
 	//Data_ts * m;
+	while (1) {
 	buff[0]='1';
-	senda(0,18);
+	senda2(0,18);
 	getinf((Data_a_ts *)&m);
 	buff[gcp]='2';
-	senda(gcp,18);
+	senda2(gcp,18);
 	getinf((Data_a_ts *)&m);
 	buff[gcp]='3';
-	senda(gcp,18);
+	senda2(gcp,18);
 	rbuff(0,18);
 	rbuff(18,18);
 	getinf((Data_a_ts *)&m);
 	buff[gcp]='4';
-	senda(gcp,18);
+	senda2(gcp,18);
 	rbuff(36,18);
 	getinf((Data_a_ts *)&m);
+	}
 }
 //
 void rcv(uint32_t sz){
