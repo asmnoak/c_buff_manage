@@ -15,6 +15,15 @@
 
 // TODO: insert other definitions and declarations here
 #define BUFFSZ 64
+#define BLOCKSZ 16
+#define MAXMSGSZATEND 12
+typedef enum {
+	FREE =0,
+	PROCESSING =1,
+	USED =2,
+	LOCKED =3,
+	NOAREA =4
+} Status_ts;
 typedef struct {
 	int16_t uhOffset;
 	int16_t shSize;
@@ -23,6 +32,15 @@ typedef struct {
 	Data_ts  stData_a[3];
 } Data_a_ts;
 Data_a_ts stData;
+typedef struct {
+	int16_t uhOffset;
+	int16_t shSize;
+	uint8_t next;
+	uint8_t prev;
+	Status_ts status;
+} List_ts;
+List_ts list[BLOCKSZ];
+int16_t ltop;
 //Data_a_ts stData_p_a = {&stData_a[0],&stData_a[1],&stData_a[3]};
 
 uint8_t buff[BUFFSZ];
@@ -43,6 +61,13 @@ int32_t  grsz;/* read size */
 int32_t  grp2; /* read offset */
 int32_t  grsz2;/* read size */
 uint8_t  buff_full;
+uint8_t  inmsg;
+uint8_t  over;
+uint8_t  current;
+int32_t  mcnt;
+int32_t  overcnt;
+int32_t  msgsz;
+
 
 
 
@@ -240,12 +265,214 @@ void release(uint32_t offset, uint32_t size){
 	}
 	buff_full = 0;
 }
+//
+//
+uint8_t regmsg(){
+	uint32_t i,j;
+	uint8_t last;
+	uint8_t cl;
+	current=0;
+	if (over==1) { /* over flow */
+		return 0;
+	}
+	mcnt++;
+	/* get free */
+	for (i=1;i<BLOCKSZ;i++){
+		if(list[i].status==FREE){
+			break;
+		}
+	}
+	if (i>=BLOCKSZ) {
+		return 0; /* no entry */
+	}
+	current=i;
+	list[i].status=PROCESSING;
+	list[i].shSize=0;
+	list[i].uhOffset=ctop-1;
+	if (ltop==0){
+		list[i].prev=0;
+		list[i].next=0;
+		ltop = i;
+	} else {
+		cl=ltop;
+		while(cl!=0) {
+			if (list[cl].next==0) {
+				if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+					list[i].next=cl;
+					list[i].prev=list[cl].prev;
+					list[cl].prev=i;
+					if(cl==ltop){
+						ltop=i;
+					}
+				} else { /* tail */
+					list[i].next=list[cl].next;
+					list[i].prev=cl;
+					list[cl].next=i;
+				}
+				break;
+			}
+			if (list[list[cl].next].uhOffset>list[i].uhOffset) {
+				if(cl==ltop){
+					//if(list[cl].next!=0) {
+						//list[list[cl].next].prev=i;
+					//}
+
+					//list[i].next=list[cl].next;
+					//list[i].prev=cl;
+					//list[cl].next=i;
+					if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+						list[cl].prev=i;
+						list[i].next=cl;
+						list[i].prev=0;
+						ltop=i;
+					} else { /* after */
+						list[list[cl].next].prev=i; /* list[cl].next!=0 here */
+						list[i].next=list[cl].next;
+						list[i].prev=cl;
+						list[cl].next=i;
+					}
+				}else{
+					//if(list[cl].next!=0) {
+						//list[list[cl].next].prev=i;
+					//}
+					//list[i].next=list[cl].next;
+					//list[i].prev=cl;
+					//list[cl].next=i;
+					//list[last].next=i;
+					if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+						list[cl].prev=i;
+						list[i].next=cl;
+						list[i].prev=0;
+						ltop=i;
+					} else { /* after */
+						list[list[cl].next].prev=i; /* list[cl].next!=0 here */
+						list[i].next=list[cl].next;
+						list[i].prev=cl;
+						list[cl].next=i;
+					}
+				}
+				break;
+			}
+			last=cl;
+			cl=list[cl].next;
+		}
+	}
+	return 1;
+}
+uint8_t chkbuff(uint32_t cctop){
+	uint8_t cl;
+	cl=ltop;
+	while (cl!=0) {
+		if (cctop>=list[cl].uhOffset && cctop<(list[cl].uhOffset+list[cl].shSize)) {
+			return 0;
+		}
+		cl=list[cl].next;
+	}
+	return 1;
+}
+uint8_t rlist(uint16_t offset, int16_t size){
+	uint8_t cl;
+	uint8_t last;
+	cl=ltop;
+	while (cl!=0) {
+		if (offset>=list[cl].uhOffset && offset<(list[cl].uhOffset+list[cl].shSize)) {
+			/* remove entry */
+			if(cl==ltop){
+				if (list[cl].next!=0) {
+					list[list[cl].next].prev = 0;
+				}
+				ltop = list[cl].next;
+			} else {
+				list[last].next = list[cl].next;
+				if (list[cl].next!=0) {
+					list[list[cl].next].prev = last;
+				}
+			}
+			list[cl].status=FREE;
+			if (list[cl].next!=0 && list[cl].shSize<size && (list[cl].uhOffset
+					+ list[cl].shSize)==list[list[cl].next].uhOffset) { /* more entry */
+				size = size - list[cl].shSize;
+				offset = list[list[cl].next].uhOffset;
+			} else {
+				break;
+			}
+		}
+		last = cl;
+		cl=list[cl].next;
+	}
+	return 1;
+}
+void rcvirq(uint8_t ch)
+{
+	uint8_t ret;
+	/* read reg */
+	if(over==0 && chkbuff(ctop)==1) {
+		buff[ctop]=ch;
+		ctop++;
+		if (inmsg==1) {
+			msgsz++;
+		}
+		if (ctop>=endp) {
+			//if (chkbuff(startp)==1) { /* round ok ? */
+				ctop = startp;
+			//}
+			if (inmsg==1) {
+				over=1;
+				overcnt=overcnt + msgsz;
+			}
+		}
+    } else {
+    	if (over==0) {
+    		ctop++;
+    	}
+    	over=1;
+		overcnt++;
+	}
+	if (ch==0x7e) {
+		if (inmsg) { /* msg end */
+			if (over==1) { /*　over　flow */
+				/* remove entry */
+				if (current != 0) {
+					list[current].status=FREE;
+					list[list[current].next].prev = list[current].prev;
+					if (current==ltop) {
+						ltop=list[current].next;
+					} else {
+						list[list[current].prev].next = list[current].next;
+					}
+					mcnt--;
+				}
+			} else {
+				list[current].shSize=msgsz;
+				list[current].status=USED;
+				/* if near end, round ctop */
+				if (ctop > endp - MAXMSGSZATEND) {
+					if (chkbuff(startp)==1) { /* round ok ? */
+						ctop = startp;
+					}
+				}
+			}
+			inmsg=0;
+			over=0;
+			msgsz=0;
+		} else {/* new msg */
+			ret=regmsg();
+			if (ret==0) { /* no entry */
+				ctop--; /* adjust */
+				over=1;
+			}
+			inmsg=1;
+			msgsz=1;
+		}
+	}
+}
 int main(void) {
 
     // TODO: insert code here
 	Data_a_ts m;
 	int16_t uu;
-	uint32_t ss;
+	uint32_t ss,i,j;
+	uint8_t sss[] = "~0abcdefghijk~";
 	startp = 0;
 	endp = BUFFSZ -1;
 	retp=BUFFSZ -1;
@@ -253,6 +480,32 @@ int main(void) {
 	ftop = 0;
 	rtop = 0; /* rcv read */
 	buff_full = 0;
+	inmsg = 0;
+	uu=0;
+	mcnt=0;
+	ltop = 0;
+	over=0;
+	overcnt=0;
+	msgsz=0;
+	for (i=0;i<BLOCKSZ;i++){
+		list[i].status=FREE;
+	}
+	//
+	for(ss=0;ss<9;ss++){
+		 uu=0;
+		 if(ss==3) {
+			 rlist(0,42);
+		 }
+		 if (ss==6) {
+			 ss=6;
+		 }
+		 sss[uu+1]=sss[uu+1]+1;
+		 while(sss[uu]!='\0') {
+			rcvirq(sss[uu]);
+			uu++;
+		 }
+    }
+	while(1);
 	//
 	sendtest();
 	ctop = 0;
