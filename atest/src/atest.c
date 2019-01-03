@@ -14,8 +14,9 @@
 // TODO: insert other include files here
 
 // TODO: insert other definitions and declarations here
-#define BUFFSZ 64
+#define BUFFSZ 84
 #define BLOCKSZ 16
+#define INFOSZ 3
 #define MAXMSGSZATEND 12
 typedef enum {
 	FREE =0,
@@ -29,7 +30,7 @@ typedef struct {
 	int16_t shSize;
 } Data_ts;
 typedef struct {
-	Data_ts  stData_a[3];
+	Data_ts  stData_a[INFOSZ];
 } Data_a_ts;
 Data_a_ts stData;
 typedef struct {
@@ -70,7 +71,7 @@ int32_t  msgsz;
 
 
 
-
+// send pointer
 void senda(uint32_t offset, uint32_t size) {
 	if (buff_full) {
 		return; /* busy */
@@ -197,7 +198,7 @@ void sendtest() {
 	getinf((Data_a_ts *)&m);
 	}
 }
-//
+// rcv pointer
 void rcv(uint32_t sz){
     if (ftop>ctop && (ctop + sz > ftop)) {
     	buff_full = 1;
@@ -265,11 +266,10 @@ void release(uint32_t offset, uint32_t size){
 	}
 	buff_full = 0;
 }
-//
+// rcv list
 //
 uint8_t regmsg(){
-	uint32_t i,j;
-	uint8_t last;
+	uint32_t i;
 	uint8_t cl;
 	current=0;
 	if (over==1) { /* over flow */
@@ -353,7 +353,6 @@ uint8_t regmsg(){
 				}
 				break;
 			}
-			last=cl;
 			cl=list[cl].next;
 		}
 	}
@@ -370,6 +369,7 @@ uint8_t chkbuff(uint32_t cctop){
 	}
 	return 1;
 }
+// release list, rcv and send
 uint8_t rlist(uint16_t offset, int16_t size){
 	uint8_t cl;
 	uint8_t last;
@@ -466,6 +466,131 @@ void rcvirq(uint8_t ch)
 		}
 	}
 }
+// rcv list test
+void rcvtest() {
+	uint8_t sss[] = "~0abcdefghijk~";
+	uint32_t ss,uu;
+
+	for(ss=0;ss<9;ss++){
+		 uu=0;
+		 if(ss==3) {
+			 rlist(0,42);
+		 }
+		 if (ss==6) {
+			 ss=6;
+		 }
+		 sss[uu+1]=sss[uu+1]+1;
+		 while(sss[uu]!='\0') {
+			rcvirq(sss[uu]);
+			uu++;
+		 }
+    }
+}
+// send list
+uint8_t slist(uint16_t offset, int16_t size){
+	uint32_t i;
+	uint8_t cl;
+	/* get free */
+	for (i=1;i<BLOCKSZ;i++){
+		if(list[i].status==FREE){
+			break;
+		}
+	}
+	if (i>=BLOCKSZ) {
+		return 0; /* no entry */
+	}
+	current=i;
+	list[i].status=USED;
+	list[i].shSize=size;
+	list[i].uhOffset=offset;
+	if (ltop==0){
+		list[i].prev=0;
+		list[i].next=0;
+		ltop = i;
+	} else {
+		cl=ltop;
+		while(cl!=0) {
+			if (list[cl].next==0) {
+				if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+					list[i].next=cl;
+					list[i].prev=list[cl].prev;
+					list[cl].prev=i;
+					if(cl==ltop){
+						ltop=i;
+					}
+				} else { /* tail */
+					list[i].next=list[cl].next;
+					list[i].prev=cl;
+					list[cl].next=i;
+				}
+				break;
+			}
+			if (list[list[cl].next].uhOffset>list[i].uhOffset) {
+				if(cl==ltop){
+					if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+						list[cl].prev=i;
+						list[i].next=cl;
+						list[i].prev=0;
+						ltop=i;
+					} else { /* after */
+						list[list[cl].next].prev=i; /* list[cl].next!=0 here */
+						list[i].next=list[cl].next;
+						list[i].prev=cl;
+						list[cl].next=i;
+					}
+				}else{
+					if(list[cl].uhOffset>list[i].uhOffset) { /* front */
+						list[cl].prev=i;
+						list[i].next=cl;
+						list[i].prev=0;
+						ltop=i;
+					} else { /* after */
+						list[list[cl].next].prev=i; /* list[cl].next!=0 here */
+						list[i].next=list[cl].next;
+						list[i].prev=cl;
+						list[cl].next=i;
+					}
+				}
+				break;
+			}
+			cl=list[cl].next;
+		}
+	}
+	return 1;
+}
+void sinfo(Data_a_ts * ptr){
+	uint8_t cl,last,idx;
+	for (idx=0;idx<INFOSZ;idx++) {
+		stData.stData_a[idx].uhOffset = 0;
+		stData.stData_a[idx].shSize = 0;
+	}
+	idx=0;
+	cl=ltop;
+	last = 0;
+	while (cl!=0) {
+		if (cl==ltop && list[cl].uhOffset != 0) { /* free area */
+			stData.stData_a[idx].uhOffset = 0;
+			stData.stData_a[idx].shSize = list[cl].uhOffset;
+			idx++;
+		}
+		if (list[cl].next != 0 && list[list[cl].next].uhOffset != (list[cl].uhOffset + list[cl].shSize)) { /* free area */
+			stData.stData_a[idx].uhOffset = list[cl].uhOffset + list[cl].shSize;
+			stData.stData_a[idx].shSize = list[list[cl].next].uhOffset - list[cl].uhOffset - list[cl].shSize;
+			idx++;
+		}
+		last = cl;
+		cl=list[cl].next;
+	}
+	if (last != 0 && endp != ( list[last].uhOffset + list[last].shSize - 1)) {
+		stData.stData_a[idx].uhOffset = list[last].uhOffset + list[last].shSize;
+		stData.stData_a[idx].shSize = endp - list[last].uhOffset - list[last].shSize + 1;
+	} else if (ltop==0) {
+		stData.stData_a[0].uhOffset = 0;
+		stData.stData_a[0].shSize = endp + 1;
+	}
+	*ptr = stData;
+}
+
 int main(void) {
 
     // TODO: insert code here
@@ -490,27 +615,38 @@ int main(void) {
 	for (i=0;i<BLOCKSZ;i++){
 		list[i].status=FREE;
 	}
-	//
-	for(ss=0;ss<9;ss++){
-		 uu=0;
-		 if(ss==3) {
-			 rlist(0,42);
-		 }
-		 if (ss==6) {
-			 ss=6;
-		 }
-		 sss[uu+1]=sss[uu+1]+1;
-		 while(sss[uu]!='\0') {
-			rcvirq(sss[uu]);
-			uu++;
-		 }
-    }
+	// send list test
+	sinfo(&m);
+	slist(0,14);
+	slist(14,14);
+	slist(28,14);
+	sinfo(&m);
+	slist(42,14);
+	slist(56,14);
+	slist(70,14);
+	sinfo(&m);
+	rlist(0,14);
+	rlist(14,14);
+	rlist(28,14);
+	sinfo(&m);
+	rlist(42,14);
+	rlist(56,14);
+	sinfo(&m);
+	slist(0,14);
+	slist(14,14);
+	//slist(28,14);
+	sinfo(&m);
+	rlist(0,14);
+	sinfo(&m);
 	while(1);
-	//
+	// rcv list test
+	rcvtest();
+	while(1);
+	// send pointer test
 	sendtest();
 	ctop = 0;
 	ftop = 0;
-	//
+	// rcv pointer test
 	rcv(16);
 	rcv(18);
 	rcv(12);
