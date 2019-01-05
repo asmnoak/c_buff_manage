@@ -618,25 +618,23 @@ int main(void) {
 	// send list test
 	sinfo(&m);
 	slist(0,14);
+	sinfo(&m);
 	slist(14,14);
 	slist(28,14);
-	sinfo(&m);
 	slist(42,14);
+	rlist(0,14);
+	rlist(28,14);
 	slist(56,14);
 	slist(70,14);
-	sinfo(&m);
-	rlist(0,14);
-	rlist(14,14);
-	rlist(28,14);
 	sinfo(&m);
 	rlist(42,14);
 	rlist(56,14);
 	sinfo(&m);
+	//slist(0,14);
 	slist(0,14);
-	slist(14,14);
 	//slist(28,14);
 	sinfo(&m);
-	rlist(0,14);
+	//rlist(0,14);
 	sinfo(&m);
 	while(1);
 	// rcv list test
