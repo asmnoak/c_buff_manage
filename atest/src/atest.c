@@ -18,6 +18,8 @@
 #define BLOCKSZ 16
 #define INFOSZ 3
 #define MAXMSGSZATEND 12
+#define SIZE 24
+uint16_t  crc16_table[256];
 typedef enum {
 	FREE =0,
 	PROCESSING =1,
@@ -591,13 +593,67 @@ void sinfo(Data_a_ts * ptr){
 	*ptr = stData;
 }
 
+void make_crc16_table(void) {
+	uint16_t  i;
+	int j;
+    for (i = 0; i < 256; i++) {
+        uint16_t c = i;
+        for ( j = 0; j < 8; j++) {
+            c = (c & 1) ? (0xA001 ^ (c >> 1)) : (c >> 1);
+        }
+        crc16_table[i] = c;
+    }
+}
+uint16_t crc16(uint16_t init,uint8_t *buf, size_t len) {
+    uint16_t c = init;
+    //size_t i;
+    for ( size_t i = 0; i < len; i++) {
+        c = crc16_table[(c ^ buf[i]) & 0xFF] ^ (c >> 8); // big endian
+    }
+    return c;
+}
+void movef(uint8_t *buf, size_t off1, size_t off2) {
+    uint16_t c ;
+    //size_t i;
+    for ( size_t i = off1; i < SIZE; i++) {
+    	if (i<SIZE-1) {
+            *(buf+i) = *(buf+i+1);
+    	} else {
+    		if (off2>0) {
+    		    *(buf+i) = *(buf);
+    		}
+    	}
+    }
+    if (off2!=0) {
+    	for ( size_t i =0; i < off2-1; i++) {
+    			*(buf+i) = *(buf+i+1);
+    	}
+    }
+    return;
+}
+
 int main(void) {
 
     // TODO: insert code here
+	uint16_t crc,crc2,crc3;
+	uint8_t in_a[10] = {'a','b','c','d','1','2','3','4',0x6d,0x46};
+	uint8_t in2_a[SIZE] = {'0','a','b','c','~','e','f','g','h','i','j','k','l','m','n','o','~','p','q','r','s','t','u','v'};
+	uint8_t in3_a[7] = {'t','u','v','0','a','b','c'};
+    //
 	Data_a_ts m;
 	int16_t uu;
 	uint32_t ss,i,j;
 	uint8_t sss[] = "~0abcdefghijk~";
+	//
+	make_crc16_table();
+	crc=crc16(0,in_a, 4) ;
+	crc2=crc16(crc,&in_a[4], 4) ;
+	crc3=crc16(0,in_a, 8) ;
+	movef(in2_a,20,4);
+	crc=crc16(0,&in2_a[20], 4) ;
+	crc2=crc16(crc,&in_a[0], 3) ;
+	crc3=crc16(0,in3_a, 7) ;
+	//
 	startp = 0;
 	endp = BUFFSZ -1;
 	retp=BUFFSZ -1;
